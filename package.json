@@ -4,8 +4,16 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "glob": "^7.1.6",
+    "lodash": "^4.17.20",
+    "nodemon": "^2.0.6",
+    "puppeteer": "^5.5.0"
+  }
 }
