@@ -15,12 +15,13 @@ function generateChecksum(str, algorithm, encoding) {
     .digest(encoding || 'hex');
 }
 
+// promisify setTimeout
 function timeout(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// anonymous arrow function 
-const screenshot = async (url, delaySeconds, screenshotPath) => {
+
+const screenshot = async (url, screenshotPath) => {
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
   page.setViewport({
@@ -28,14 +29,17 @@ const screenshot = async (url, delaySeconds, screenshotPath) => {
     height:2080,
     deviceScaleFactor: 1
   });
-  await page.goto(url);
-  await timeout(delaySeconds*1000);
+  await page.goto(url, {waitUntil:'networkidle2'});
+  // give the animations a chance to play out
+  await timeout(5000);
   await page.screenshot({ path: screenshotPath });
 
   return browser.close();
 };
 
-/* const file = fs.readFileSync('./yeee.png');
+if (!fs.existsSync("./screenshots/")) {
+  fs.mkdirSync("./screenshots/");
+}
 
 const checksum1 = generateChecksum(file);
 
@@ -68,8 +72,20 @@ if (!fs.existsSync("./screenshots/")) {
 
   //
 
+  // generate all promises from the url list
+  // async keyword turns return value into a promise, even if it resolves instantly
+  const screenshotPromises = _.map(urlList, async (url) => {
+    const hostname = URL.parse(url).hostname;
+    await screenshot(url, "./screenshots/" + hostname + ".png");
+    const screenshotFile = await fsPromises.readFile("./screenshots/" + hostname + ".png");
+    return {hostname,checksum:generateChecksum(screenshotFile)};
+  });
   
+  // Promise.all collects a bunch of promises into one
+  // wait for all promises to resolve, if any one fails, the whole thing fails
+  const result = await Promise.all(screenshotPromises);
 
+  console.log(result);
 
 
 
