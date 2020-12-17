@@ -5,6 +5,8 @@ const fsPromises = require('fs').promises
 const crypto = require('crypto');
 const URL = require('url');
 const glob = require('glob');
+const sqlite3 = require('sqlite3').verbose();
+const SQL = require('sql-template-strings');
 
 const urlList = require('./config/urlList');
 
@@ -41,37 +43,48 @@ if (!fs.existsSync("./screenshots/")) {
   fs.mkdirSync("./screenshots/");
 }
 
-const checksum1 = generateChecksum(file);
-
-
-console.log(checksum1); */
-/* 
-screenshot("https://luedemann2.de/",5,"1.png");
-screenshot("https://luedemann2.de/",5,"2.png");
-screenshot("https://luedemann2.de/",5,"3.png");
- */
-
-
-if (!fs.existsSync("./screenshots/")) {
-  fs.mkdirSync("./screenshots/");
+if (!fs.existsSync("./db/")) {
+  fs.mkdirSync("./db/");
 }
 
-(async () => {
+const initChecksumTable = async (db) => {
+  return db.run("CREATE TABLE IF NOT EXISTS checksums(id integer primary key, hostname text, checksum text)");
+}
 
-  const oldFiles = []
-  _.forEach(urlList, async (url) => {
-    const oldFiles = await fsPromises.readFile(url);  
+const resetChecksumTable = async (db) => {
+  return db.run("DROP TABLE checksums");
+}
+
+const insertChecksum = async (db, hostname, checksum) => {
+  return db.run("INSERT INTO checksums(hostname,checksum) VALUES($hostname,$checksum)", {
+    $hostname:hostname,
+    $checksum:checksum
+  });
+}
+
+
+(async () => {
+  // connect to db
+  let db;
+  try {
+    db = await new sqlite3.Database('./db/hashes.db');
+    console.log("established db connection");
+  } catch (err) {
+    console.log(err);
+    throw err;
+  }
+
+  await resetChecksumTable(db);
+
+  await initChecksumTable(db);
+
+  await insertChecksum(db, "test", "test");
+
+  db.all("SELECT * from checksums", (err,rows) => {
+    console.log(rows);
   })
 
-
-  // create new screenshots
-  await Promise.all(_.map(urlList, (url) => {
-    const filePath = "./screenshots/" + URL.parse(url).hostname + "_" + (+new Date()) + ".png";
-    return screenshot(url,3, filePath);
-  }))
-
-  //
-
+  
   // generate all promises from the url list
   // async keyword turns return value into a promise, even if it resolves instantly
   const screenshotPromises = _.map(urlList, async (url) => {
@@ -80,13 +93,28 @@ if (!fs.existsSync("./screenshots/")) {
     const screenshotFile = await fsPromises.readFile("./screenshots/" + hostname + ".png");
     return {hostname,checksum:generateChecksum(screenshotFile)};
   });
-  
+
   // Promise.all collects a bunch of promises into one
   // wait for all promises to resolve, if any one fails, the whole thing fails
   const result = await Promise.all(screenshotPromises);
 
   console.log(result);
-
+  
+  // doing the db work
 
 
 })();
+
+/* let db;
+try {
+  db = await new sqlite3.Database('./db/hashes.db');
+  console.log("established db connection");
+} catch (err) {
+  console.log(err);
+  throw err;
+}
+
+db.close((err) => {
+  if (err) console.log(err);
+  console.log("closed db connection");
+}) */

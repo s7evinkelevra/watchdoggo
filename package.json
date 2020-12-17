@@ -13,7 +13,10 @@
   "dependencies": {
     "glob": "^7.1.6",
     "lodash": "^4.17.20",
+    "lowdb": "^1.0.0",
     "nodemon": "^2.0.6",
-    "puppeteer": "^5.5.0"
+    "puppeteer": "^5.5.0",
+    "sql-template-strings": "^2.2.2",
+    "sqlite3": "^5.0.0"
   }
 }
