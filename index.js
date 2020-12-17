@@ -5,7 +5,7 @@ const fsPromises = require('fs').promises
 const crypto = require('crypto');
 const URL = require('url');
 
-const urlList = require('./config/urlList');
+const {urlList, reportEmail} = require('./config.js');
 
 function generateChecksum(str, algorithm, encoding) {
   return crypto
