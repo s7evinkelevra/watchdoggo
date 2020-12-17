@@ -118,3 +118,4 @@ dist
 .png 
 screenshots/
 db
+db.json

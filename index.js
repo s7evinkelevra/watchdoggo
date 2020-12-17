@@ -4,6 +4,8 @@ const fs = require('fs');
 const fsPromises = require('fs').promises
 const crypto = require('crypto');
 const URL = require('url');
+const low = require('lowdb')
+const FileSync = require('lowdb/adapters/FileSync')
 
 const {urlList, reportEmail} = require('./config.js');
 
@@ -41,6 +43,10 @@ if (!fs.existsSync("./screenshots/")) {
 
 
 (async () => {
+  const adapter = new FileSync('db.json');
+  const db = low(adapter);
+
+  db.defaults({checksums: [] }).write();
 
   // generate all promises from the url list
   // async keyword turns return value into a promise, even if it resolves instantly
@@ -48,15 +54,39 @@ if (!fs.existsSync("./screenshots/")) {
     const hostname = URL.parse(url).hostname;
     await screenshot(url, "./screenshots/" + hostname + ".png");
     const screenshotFile = await fsPromises.readFile("./screenshots/" + hostname + ".png");
-    return {hostname,checksum:generateChecksum(screenshotFile)};
+    return {hostname,checksum:generateChecksum(screenshotFile),createdAt: +new Date()};
   });
   
   // Promise.all collects a bunch of promises into one
   // wait for all promises to resolve, if any one fails, the whole thing fails
-  const result = await Promise.all(screenshotPromises);
+  const results = await Promise.all(screenshotPromises);
 
-  console.log(result);
+  // saving the results to the db
+  db.get("checksums").push(...results).write();
 
+  const checksumsTest = db.get('checksums')
+    .filter({hostname:"luedemann2.de"})
+    .sortBy((o) => (o.createdAt))
+    .take(5)
+    .map("checksum")
+    .value();
 
+  const changes = _.map(urlList, (url) => {
+    const hostname = URL.parse(url).hostname;
+    const checksums = db.get('checksums')
+      .filter({hostname})
+      .sortBy((o) => (-o.createdAt))
+      .take(5)
+      .map("checksum")
+      .value();
+    console.log(hostname);
+    console.log(checksums);
+    return {hostname, changed:!_.every(checksums, (o) => (o===checksums[0]))}
+  })
+
+  changes.forEach((site) => {
+    console.log(site.hostname);
+    site.changed ? console.log("dayum") : console.log("all good");
+  })
 
 })();
