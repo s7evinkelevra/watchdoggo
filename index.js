@@ -64,13 +64,7 @@ if (!fs.existsSync("./screenshots/")) {
   // saving the results to the db
   db.get("checksums").push(...results).write();
 
-  const checksumsTest = db.get('checksums')
-    .filter({hostname:"luedemann2.de"})
-    .sortBy((o) => (o.createdAt))
-    .take(5)
-    .map("checksum")
-    .value();
-
+  // check if last 5 checksums are equal
   const changes = _.map(urlList, (url) => {
     const hostname = URL.parse(url).hostname;
     const checksums = db.get('checksums')
@@ -84,6 +78,7 @@ if (!fs.existsSync("./screenshots/")) {
     return {hostname, changed:!_.every(checksums, (o) => (o===checksums[0]))}
   })
 
+  // print that shit
   changes.forEach((site) => {
     console.log(site.hostname);
     site.changed ? console.log("dayum") : console.log("all good");

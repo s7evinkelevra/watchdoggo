@@ -11,7 +11,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "glob": "^7.1.6",
     "lodash": "^4.17.20",
     "nodemon": "^2.0.6",
     "puppeteer": "^5.5.0"
