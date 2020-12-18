@@ -31,7 +31,7 @@ const screenshot = async (url, screenshotPath) => {
   });
   await page.goto(url, {waitUntil:'networkidle2'});
   // give the animations a chance to play out
-  await timeout(5000);
+  await timeout(3000);
   await page.screenshot({ path: screenshotPath });
 
   return browser.close();
@@ -41,8 +41,25 @@ if (!fs.existsSync("./screenshots/")) {
   fs.mkdirSync("./screenshots/");
 }
 
+const asyncChecksumFromFile = async (path) => {
+  const screenshotFile = await fsPromises.readFile(path);
+  const checksum = generateChecksum(screenshotFile)
+  return checksum;
+}
+
+const mapURLtoChecksumPromise = async (url) => {
+  const hostname = URL.parse(url).hostname;
+  const screenshotPath = "./screenshots/" + hostname + ".png";
+
+  await screenshot(url, screenshotPath);
+  const checksum = await asyncChecksumFromFile(screenshotPath);
+
+  return { url, hostname, checksum, createdAt: (+new Date()) }
+}
 
 (async () => {
+
+  // init db
   const adapter = new FileSync('db.json');
   const db = low(adapter);
 
@@ -50,14 +67,9 @@ if (!fs.existsSync("./screenshots/")) {
 
   // generate all promises from the url list
   // async keyword turns return value into a promise, even if it resolves instantly
-  const screenshotPromises = _.map(urlList, async (url) => {
-    const hostname = URL.parse(url).hostname;
-    await screenshot(url, "./screenshots/" + hostname + ".png");
-    const screenshotFile = await fsPromises.readFile("./screenshots/" + hostname + ".png");
-    return {hostname,checksum:generateChecksum(screenshotFile),createdAt: +new Date()};
-  });
+  const screenshotPromises = _.map(urlList, mapURLtoChecksumPromise);
   
-  // Promise.all collects a bunch of promises into one
+  // Promise.all collects a bunch of promises into one and spits out the results of all promises as an array
   // wait for all promises to resolve, if any one fails, the whole thing fails
   const results = await Promise.all(screenshotPromises);
 
@@ -68,20 +80,25 @@ if (!fs.existsSync("./screenshots/")) {
   const changes = _.map(urlList, (url) => {
     const hostname = URL.parse(url).hostname;
     const checksums = db.get('checksums')
-      .filter({hostname})
+      .filter({url})
       .sortBy((o) => (-o.createdAt))
       .take(5)
       .map("checksum")
       .value();
     console.log(hostname);
     console.log(checksums);
-    return {hostname, changed:!_.every(checksums, (o) => (o===checksums[0]))}
+    const changed = !_.every(checksums, (o) => (o === checksums[0]))
+    return {url,hostname,changed}
   })
 
-  // print that shit
-  changes.forEach((site) => {
-    console.log(site.hostname);
-    site.changed ? console.log("dayum") : console.log("all good");
-  })
+  // some questionable chaining (and spelling of questionable)
+  const changedURLs = _.chain(changes)
+    .filter("changed")
+    .map("url")
+    .value();
+
+  console.log(changedURLs);
+  
+  
 
 })();
