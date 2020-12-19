@@ -37,6 +37,18 @@ const screenshot = async (url, screenshotPath) => {
   return browser.close();
 };
 
+const fakeScreenshot = async (url, screenshotPath, fakeMode) => {
+  switch(fakeMode){
+    case "fixedDifferent":
+      return fsPromises.writeFile(screenshotPath, url + "i change the hash fuck you");
+    case "randomDifferent":
+      return fsPromises.writeFile(screenshotPath, url + Math.random().toFixed(8).toString());
+    case "fixed":
+    default:
+      return fsPromises.writeFile(screenshotPath, url);
+  }
+}
+
 if (!fs.existsSync("./screenshots/")) {
   fs.mkdirSync("./screenshots/");
 }
@@ -65,16 +77,21 @@ const mapURLtoChecksumPromise = async (url) => {
 
   db.defaults({checksums: [] }).write();
 
+  // control if we actually want to wait for screenshot generation....
+  if(false){
   // generate all promises from the url list
   // async keyword turns return value into a promise, even if it resolves instantly
   const screenshotPromises = _.map(urlList, mapURLtoChecksumPromise);
-  
+
   // Promise.all collects a bunch of promises into one and spits out the results of all promises as an array
   // wait for all promises to resolve, if any one fails, the whole thing fails
   const results = await Promise.all(screenshotPromises);
 
   // saving the results to the db
   db.get("checksums").push(...results).write();
+  }
+
+
 
   // check if last 5 checksums are equal
   const changes = _.map(urlList, (url) => {
@@ -88,7 +105,7 @@ const mapURLtoChecksumPromise = async (url) => {
     console.log(hostname);
     console.log(checksums);
     const changed = !_.every(checksums, (o) => (o === checksums[0]))
-    return {url,hostname,changed}
+    return {url,hostname,changed,lastCheckSum}
   })
 
   // some questionable chaining (and spelling of questionable)
@@ -96,6 +113,8 @@ const mapURLtoChecksumPromise = async (url) => {
     .filter("changed")
     .map("url")
     .value();
+
+  
 
   console.log(changedURLs);
   
