@@ -79,16 +79,16 @@ const mapURLtoChecksumPromise = async (url) => {
 
   // control if we actually want to wait for screenshot generation....
   if(false){
-  // generate all promises from the url list
-  // async keyword turns return value into a promise, even if it resolves instantly
-  const screenshotPromises = _.map(urlList, mapURLtoChecksumPromise);
+    // generate all promises from the url list
+    // async keyword turns return value into a promise, even if it resolves instantly
+    const screenshotPromises = _.map(urlList, mapURLtoChecksumPromise);
 
-  // Promise.all collects a bunch of promises into one and spits out the results of all promises as an array
-  // wait for all promises to resolve, if any one fails, the whole thing fails
-  const results = await Promise.all(screenshotPromises);
+    // Promise.all collects a bunch of promises into one and spits out the results of all promises as an array
+    // wait for all promises to resolve, if any one fails, the whole thing fails
+    const results = await Promise.all(screenshotPromises);
 
-  // saving the results to the db
-  db.get("checksums").push(...results).write();
+    // saving the results to the db
+    db.get("checksums").push(...results).write();
   }
 
 
@@ -99,13 +99,19 @@ const mapURLtoChecksumPromise = async (url) => {
     const checksums = db.get('checksums')
       .filter({url})
       .sortBy((o) => (-o.createdAt))
-      .take(5)
+      .take(2)
       .map("checksum")
       .value();
     console.log(hostname);
     console.log(checksums);
-    const changed = !_.every(checksums, (o) => (o === checksums[0]))
-    return {url,hostname,changed,lastCheckSum}
+
+    /* const changed = !_.every(checksums, (o) => (o === checksums[0])) */
+    if( checksums.length < 1 || checksums.length > 2) {
+      // FIXME(Jan): handle errors
+      console.log("haha you thought i would handle this case lul!");
+    }
+    const changed = checksums.length === 2 ? !checksums[0] === checksums[1] : false;
+    return {url,hostname,changed,lastCheckSum:checksums[0]}
   })
 
   // some questionable chaining (and spelling of questionable)
