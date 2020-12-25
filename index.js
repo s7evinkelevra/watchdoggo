@@ -6,8 +6,17 @@ const crypto = require('crypto');
 const URL = require('url');
 const low = require('lowdb')
 const FileSync = require('lowdb/adapters/FileSync')
+const sgMail = require('@sendgrid/mail');
+const schedule = require('node-schedule');
 
-const {urlList, reportEmail} = require('./config.js');
+
+if(process.env.NODE_ENV !== "production"){
+  require("dotenv").config();
+}
+
+// config stuff
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+const urlList = require('./urlList.js');
 
 function generateChecksum(str, algorithm, encoding) {
   return crypto
@@ -37,20 +46,19 @@ const screenshot = async (url, screenshotPath) => {
   return browser.close();
 };
 
-const fakeScreenshot = async (url, screenshotPath, fakeMode) => {
+const fakeScreenshot = async (url, screenshotPath, fakeMode = "fixed") => {
   switch(fakeMode){
     case "fixedDifferent":
+    case "fd":
       return fsPromises.writeFile(screenshotPath, url + "i change the hash fuck you");
     case "randomDifferent":
+    case "rd":
       return fsPromises.writeFile(screenshotPath, url + Math.random().toFixed(8).toString());
     case "fixed":
+    case "f":
     default:
       return fsPromises.writeFile(screenshotPath, url);
   }
-}
-
-if (!fs.existsSync("./screenshots/")) {
-  fs.mkdirSync("./screenshots/");
 }
 
 const asyncChecksumFromFile = async (path) => {
@@ -59,45 +67,51 @@ const asyncChecksumFromFile = async (path) => {
   return checksum;
 }
 
-const mapURLtoChecksumPromise = async (url) => {
-  const hostname = URL.parse(url).hostname;
-  const screenshotPath = "./screenshots/" + hostname + ".png";
-
-  await screenshot(url, screenshotPath);
-  const checksum = await asyncChecksumFromFile(screenshotPath);
-
-  return { url, hostname, checksum, createdAt: (+new Date()) }
+if (!fs.existsSync("./screenshots/")) {
+  fs.mkdirSync("./screenshots/");
 }
 
-(async () => {
+const main = async () => {
 
   // init db
   const adapter = new FileSync('db.json');
   const db = low(adapter);
 
+  // define the "schema"
   db.defaults({checksums: [] }).write();
 
-  // control if we actually want to wait for screenshot generation....
-  if(false){
-    // generate all promises from the url list
-    // async keyword turns return value into a promise, even if it resolves instantly
-    const screenshotPromises = _.map(urlList, mapURLtoChecksumPromise);
 
-    // Promise.all collects a bunch of promises into one and spits out the results of all promises as an array
-    // wait for all promises to resolve, if any one fails, the whole thing fails
-    const results = await Promise.all(screenshotPromises);
+  // generate all promises from the url list
+  // async keyword turns return value into a promise, even if it resolves instantly
+  const screenshotPromises = _.map(urlList, async (url) => {
+    const hostname = URL.parse(url).hostname;
+    const screenshotPath = "./screenshots/" + hostname + ".png";
 
-    // saving the results to the db
-    db.get("checksums").push(...results).write();
-  }
+    if (process.env.FAKE_SCREENSHOT === "enabled") {
+      await fakeScreenshot(url, screenshotPath, process.env.FAKE_SCREENSHOT_MODE);
+    } else {
+      await screenshot(url, screenshotPath)
+    }
+    const checksum = await asyncChecksumFromFile(screenshotPath);
+
+    return { url, hostname, checksum, createdAt: (+new Date()) }
+  });
+
+  // Promise.all collects a bunch of promises into one and spits out the results of all promises as an array
+  // wait for all promises to resolve, if any one fails, the whole thing fails
+  const results = await Promise.all(screenshotPromises);
+
+  // saving the results to the db
+  db.get("checksums").push(...results).write();
 
 
 
-  // check if last 5 checksums are equal
+  // check if last 2 checksums are equal
   const changes = _.map(urlList, (url) => {
     const hostname = URL.parse(url).hostname;
+    // TODO(Jan): check if db.get is expensive and thus should be done only once with consecutive filtering
     const checksums = db.get('checksums')
-      .filter({url})
+      .filter({ url })
       .sortBy((o) => (-o.createdAt))
       .take(2)
       .map("checksum")
@@ -106,24 +120,57 @@ const mapURLtoChecksumPromise = async (url) => {
     console.log(checksums);
 
     /* const changed = !_.every(checksums, (o) => (o === checksums[0])) */
-    if( checksums.length < 1 || checksums.length > 2) {
+    if (checksums.length < 1 || checksums.length > 2) {
       // FIXME(Jan): handle errors
       console.log("haha you thought i would handle this case lul!");
+      throw new Error("No checksums found for URL " + url);
     }
-    const changed = checksums.length === 2 ? !checksums[0] === checksums[1] : false;
-    return {url,hostname,changed,lastCheckSum:checksums[0]}
+    // if only 1 checksum is present, no change has occured
+    const changed = checksums.length === 2 ? !(checksums[0] === checksums[1]) : false;
+    return { url, hostname, changed, lastCheckSum: checksums[0] }
   })
 
   // some questionable chaining (and spelling of questionable)
-  const changedURLs = _.chain(changes)
+  const flaggedURLs = _.chain(changes)
     .filter("changed")
     .map("url")
     .value();
 
-  
 
-  console.log(changedURLs);
+  console.log(flaggedURLs);
   
-  
+  // send notification if there are urls with changed checksums of the screenshot
+  if(flaggedURLs.length > 0) {
 
-})();
+    const emailTemplate = `
+    <h2>Diese URLs sind gefugt:</h2>
+    <ul>
+      ${flaggedURLs.map((url) => "<ul>" + url + "</ul>")}
+    </ul>
+  `
+
+    // notify people of this
+    const msg = {
+      to: process.env.REPORT_EMAIL,
+      from: 'jan@luedemann2.de', // Use the email address or domain you verified above
+      subject: 'Website(s) done goofed.',
+      text: 'und solche sachen',
+      html: emailTemplate,
+    };
+
+    try {
+      await sgMail.send(msg);
+    } catch (error) {
+      console.error(error);
+
+      if (error.response) {
+        console.error(error.response.body)
+      }
+    }
+  }
+};
+
+const job = schedule.scheduleJob(process.env.CRON_SCHEDULE_EXPRESSION, () => {
+  console.log("running job....");
+  main();
+})
