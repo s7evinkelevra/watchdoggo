@@ -119,3 +119,4 @@ dist
 screenshots/
 db
 db.json
+.env
