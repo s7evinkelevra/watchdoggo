@@ -35,9 +35,10 @@ const screenshot = async (url, screenshotPath) => {
   const page = await browser.newPage();
   page.setViewport({
     width:1920,
-    height:2080,
+    height:1024,
     deviceScaleFactor: 1
   });
+  page.setDefaultNavigationTimeout(500000);
   await page.goto(url, {waitUntil:'networkidle2'});
   // give the animations a chance to play out
   await timeout(3000);
@@ -170,7 +171,9 @@ const main = async () => {
   }
 };
 
-const job = schedule.scheduleJob(process.env.CRON_SCHEDULE_EXPRESSION, () => {
-  console.log("running job....");
-  main();
-})
+//const job = schedule.scheduleJob(process.env.CRON_SCHEDULE_EXPRESSION, () => {
+//  console.log("running job....");
+//  main();
+//})
+
+main();
