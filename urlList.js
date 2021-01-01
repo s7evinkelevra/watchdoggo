@@ -1,5 +1,25 @@
 module.exports = [
   "https://luedemann2.de/",
+  "https://ganteroptik.de/",
   "https://berufseinstieg-bundeswehr.de/",
-  "https://eyeworks-store.de",
+  "https://eyeworks-store.de/",
+/* 
+  "https://bremeneyewear.de/",
+  "https://zahnarztpraxis-andrzejewski.com/",
+  "https://fenster-aufmass-richtig.de/",
+  "https://fenster-guenstig-sanieren.de/",
+  "https://mein-fenster-klemmt.de/",
+  "https://energieausgaben-reduzieren.de/",
+  "https://rasenservice-luedemann.de/",
+  "https://dienstleistungen-schroeder.de/",
+  "https://bremen-optiker.de/",
+  "https://alarmanlagen-westerwald.de/",
+  "https://oralchirurgie-westerwald.de/",
+  "https://lehrerversorgung.info/",
+  "https://newport-optik.de/",
+  "https://dr-wiechert.com/",
+  "https://holzwerkstatt-pfaff.de/",
+  "https://fit4bpol.de/",
+  "https://augenoptik-sabrina-buhl.de/",
+ */
 ]
