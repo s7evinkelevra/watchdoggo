@@ -8,7 +8,7 @@ const low = require('lowdb')
 const FileSync = require('lowdb/adapters/FileSync')
 const sgMail = require('@sendgrid/mail');
 const schedule = require('node-schedule');
-
+const Promise = require("bluebird");
 
 if(process.env.NODE_ENV !== "production"){
   require("dotenv").config();
@@ -38,7 +38,7 @@ const screenshot = async (url, screenshotPath) => {
     height:1024,
     deviceScaleFactor: 1
   });
-  page.setDefaultNavigationTimeout(500000);
+  page.setDefaultNavigationTimeout(50000);
   await page.goto(url, {waitUntil:'networkidle2'});
   // give the animations a chance to play out
   await timeout(3000);
@@ -68,11 +68,28 @@ const asyncChecksumFromFile = async (path) => {
   return checksum;
 }
 
-if (!fs.existsSync("./screenshots/")) {
-  fs.mkdirSync("./screenshots/");
+const checksumFromUrl = async (url) => {
+  const hostname = URL.parse(url).hostname;
+  const screenshotPath = "./screenshots/" + hostname + ".png";
+
+  if (process.env.FAKE_SCREENSHOT === "enabled") {
+    await fakeScreenshot(url, screenshotPath, process.env.FAKE_SCREENSHOT_MODE);
+  } else {
+    await screenshot(url, screenshotPath)
+  }
+  const checksum = await asyncChecksumFromFile(screenshotPath);
+
+  return { url, hostname, checksum, createdAt: (+new Date()) }
 }
 
+
+
 const main = async () => {
+
+  // check if screenshot dir exists and create it if not.
+  if (!fs.existsSync("./screenshots/")) {
+    fs.mkdirSync("./screenshots/");
+  }
 
   // init db
   const adapter = new FileSync('db.json');
@@ -81,33 +98,41 @@ const main = async () => {
   // define the "schema"
   db.defaults({checksums: [] }).write();
 
-
-  // generate all promises from the url list
-  // async keyword turns return value into a promise, even if it resolves instantly
-  const screenshotPromises = _.map(urlList, async (url) => {
-    const hostname = URL.parse(url).hostname;
-    const screenshotPath = "./screenshots/" + hostname + ".png";
-
-    if (process.env.FAKE_SCREENSHOT === "enabled") {
-      await fakeScreenshot(url, screenshotPath, process.env.FAKE_SCREENSHOT_MODE);
-    } else {
-      await screenshot(url, screenshotPath)
+  // so, how to create a bunch of promises but run the sequentially?
+  // create and await them one after another, duh. Previously, i created them all and awaited them.
+  // And how, you might ask? Like this:
+  /* 
+  const mapSeries = async (iterable, action) => {
+    for (const x of iterable) {
+      await action(x)
     }
-    const checksum = await asyncChecksumFromFile(screenshotPath);
+  }
 
-    return { url, hostname, checksum, createdAt: (+new Date()) }
-  });
+  mapSeries(myArray, myPromise)
+  */
+  // and that is exactly what mapSeries of the bluebird package does!
+  // Reasoning: i guess normally that is the way to go, have them execute in parallel.
+  // but here i need a managable cpu usage (not running chromium once is already enough for the poor pi :/)
+  // and also make sure the execution of any single promise doesnt take too long
+  // (i.e.) if you resolve 1000 promises in parallel, the bulk is faster but each one might take longer if they have to share limited cpu resources
+  // returns a list of objects, as seen in "checksumFromUrl"
+  const results = await Promise.mapSeries(urlList,checksumFromUrl)
+
+  // but you're on a powerful machine and just don't care about CPU and network usage?
+  // well, try this:
+  // generate all promises from the url list
+  /* const screenshotPromises = _.map(urlList, checksumFromUrl); */
 
   // Promise.all collects a bunch of promises into one and spits out the results of all promises as an array
   // wait for all promises to resolve, if any one fails, the whole thing fails
-  const results = await Promise.all(screenshotPromises);
+  /* const results = await Promise.all(screenshotPromises); */
 
   // saving the results to the db
   db.get("checksums").push(...results).write();
 
 
 
-  // check if last 2 checksums are equal
+  // check if last 2 checksums are equal in a unnecessarily verbose way
   const changes = _.map(urlList, (url) => {
     const hostname = URL.parse(url).hostname;
     // TODO(Jan): check if db.get is expensive and thus should be done only once with consecutive filtering
@@ -140,6 +165,7 @@ const main = async () => {
 
   console.log(flaggedURLs);
   
+    
   // send notification if there are urls with changed checksums of the screenshot
   if(flaggedURLs.length > 0) {
 
@@ -169,6 +195,7 @@ const main = async () => {
       }
     }
   }
+  
 };
 
 //const job = schedule.scheduleJob(process.env.CRON_SCHEDULE_EXPRESSION, () => {
