@@ -6,9 +6,9 @@ const crypto = require('crypto');
 const URL = require('url');
 const low = require('lowdb')
 const FileSync = require('lowdb/adapters/FileSync')
-const sgMail = require('@sendgrid/mail');
 const schedule = require('node-schedule');
-const Promise = require("bluebird");
+const sgMail = require('@sendgrid/mail')
+const Promise = require('bluebird');
 
 if(process.env.NODE_ENV !== "production"){
   require("dotenv").config();
@@ -41,7 +41,7 @@ const screenshot = async (url, screenshotPath) => {
   page.setDefaultNavigationTimeout(50000);
   await page.goto(url, {waitUntil:'networkidle2'});
   // give the animations a chance to play out
-  await timeout(3000);
+  await timeout(6000);
   await page.screenshot({ path: screenshotPath });
 
   return browser.close();
@@ -167,7 +167,7 @@ const main = async () => {
   
     
   // send notification if there are urls with changed checksums of the screenshot
-  if(flaggedURLs.length > 0) {
+  if(flaggedURLs.length > 0 && false) {
 
     const emailTemplate = `
     <h2>Diese URLs sind gefugt:</h2>

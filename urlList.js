@@ -3,7 +3,6 @@ module.exports = [
   "https://ganteroptik.de/",
   "https://berufseinstieg-bundeswehr.de/",
   "https://eyeworks-store.de/",
-/* 
   "https://bremeneyewear.de/",
   "https://zahnarztpraxis-andrzejewski.com/",
   "https://fenster-aufmass-richtig.de/",
@@ -21,5 +20,4 @@ module.exports = [
   "https://holzwerkstatt-pfaff.de/",
   "https://fit4bpol.de/",
   "https://augenoptik-sabrina-buhl.de/",
- */
 ]
